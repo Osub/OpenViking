@@ -76,11 +76,7 @@ def create_app(
 
         # Initialize APIKeyManager after service (needs VikingFS)
         effective_auth_mode = config.get_effective_auth_mode()
-        if (
-            effective_auth_mode == AuthMode.API_KEY
-            and config.root_api_key
-            and config.root_api_key != ""
-        ):
+        if config.root_api_key and config.root_api_key != "":
             api_key_manager = APIKeyManager(
                 root_key=config.root_api_key,
                 viking_fs=service.viking_fs,
@@ -88,10 +84,23 @@ def create_app(
             )
             await api_key_manager.load()
             app.state.api_key_manager = api_key_manager
-            logger.info(
-                "APIKeyManager initialized with encryption_enabled=%s",
-                config.encryption_enabled,
-            )
+            if effective_auth_mode == AuthMode.API_KEY:
+                logger.info(
+                    "APIKeyManager initialized with encryption_enabled=%s",
+                    config.encryption_enabled,
+                )
+            else:
+                logger.info(
+                    "APIKeyManager initialized for trusted mode account metadata with "
+                    "encryption_enabled=%s",
+                    config.encryption_enabled,
+                )
+                logger.info(
+                    "Trusted mode enabled: authentication trusts X-OpenViking-Account/User/Agent "
+                    "headers and requires the configured server API key on each request. "
+                    "Only expose this server behind a trusted network boundary or "
+                    "identity-injecting gateway."
+                )
         elif effective_auth_mode == AuthMode.TRUSTED:
             app.state.api_key_manager = None
             if config.root_api_key and config.root_api_key != "":

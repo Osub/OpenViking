@@ -129,6 +129,7 @@ class AsyncHTTPClient(BaseClient):
         self,
         url: Optional[str] = None,
         api_key: Optional[str] = None,
+        role: Optional[str] = None,
         user_id: Optional[str] = None,
         agent_id: Optional[str] = None,
         account: Optional[str] = None,
@@ -151,6 +152,7 @@ class AsyncHTTPClient(BaseClient):
         should_load_cli_config = (
             url is None
             or api_key is None
+            or role is None
             or agent_id is None
             or account is None
             or user is None
@@ -161,6 +163,7 @@ class AsyncHTTPClient(BaseClient):
             if cli_config is not None:
                 url = url or cli_config.url
                 api_key = api_key or cli_config.api_key
+                role = role or cli_config.role
                 agent_id = agent_id or cli_config.agent_id
                 account = account or cli_config.account
                 user = user or cli_config.user
@@ -173,6 +176,7 @@ class AsyncHTTPClient(BaseClient):
             )
         self._url = url.rstrip("/")
         self._api_key = api_key
+        self._role = role
         self._agent_id = agent_id
         self._account = account
         self._user_id = user
@@ -190,6 +194,8 @@ class AsyncHTTPClient(BaseClient):
             headers["X-API-Key"] = self._api_key
         if self._agent_id:
             headers["X-OpenViking-Agent"] = self._agent_id
+        if self._role:
+            headers["X-OpenViking-Role"] = self._role
         if self._account:
             headers["X-OpenViking-Account"] = self._account
         if self._user_id:

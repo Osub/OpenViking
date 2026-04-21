@@ -2,7 +2,9 @@
 
 Admin API 用于多租户环境下的账户和用户管理。包括工作区（account）的创建与删除、用户注册与移除、角色变更、API Key 重新生成。
 
-该 API 只适用于 `api_key` 模式下的管理链路。在 `trusted` 模式里，普通请求不使用 user key 注册流程；如果去调用 Admin API，服务端会返回明确权限错误，说明账户/用户管理需要切换到配置了 `root_api_key` 的 `api_key` 模式。
+该 API 适用于 `api_key` 和 `trusted` 两种模式下的管理链路。在 `trusted` 模式里，普通请求仍然不依赖 user key 注册流程；但如果请求来自受信任网关，并注入了合适的 `X-OpenViking-Role`，也可以调用 Admin API。
+
+`X-OpenViking-Role` 只在 `trusted` 模式下生效；在 `api_key` 模式下，服务端会忽略这个请求头，并始终从 API Key 推导最终角色。
 
 ## 角色与权限
 
@@ -32,6 +34,8 @@ Admin API 用于多租户环境下的账户和用户管理。包括工作区（a
 |------|------|------|--------|------|
 | account_id | str | 是 | - | 工作区 ID |
 | admin_user_id | str | 是 | - | 首个管理员用户 ID |
+| isolate_user_scope_by_agent | bool | 否 | false | 是否按 agent 进一步隔离 user scope |
+| isolate_agent_scope_by_user | bool | 否 | false | 是否按 user 进一步隔离 agent scope |
 
 **HTTP API**
 
@@ -45,7 +49,9 @@ curl -X POST http://localhost:1933/api/v1/admin/accounts \
   -H "X-API-Key: <root-key>" \
   -d '{
     "account_id": "acme",
-    "admin_user_id": "alice"
+    "admin_user_id": "alice",
+    "isolate_user_scope_by_agent": true,
+    "isolate_agent_scope_by_user": false
   }'
 ```
 
@@ -63,10 +69,29 @@ openviking admin create-account acme --admin alice
   "result": {
     "account_id": "acme",
     "admin_user_id": "alice",
-    "user_key": "7f3a9c1e..."
+    "user_key": "7f3a9c1e...",
+    "isolate_user_scope_by_agent": true,
+    "isolate_agent_scope_by_user": false
   },
   "time": 0.1
 }
+```
+
+`trusted` 模式示例：
+
+```bash
+curl -X POST http://localhost:1933/api/v1/admin/accounts \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <root-key>" \
+  -H "X-OpenViking-Account: platform" \
+  -H "X-OpenViking-User: gateway-admin" \
+  -H "X-OpenViking-Role: root" \
+  -d '{
+    "account_id": "acme",
+    "admin_user_id": "alice",
+    "isolate_user_scope_by_agent": true,
+    "isolate_agent_scope_by_user": false
+  }'
 ```
 
 ---

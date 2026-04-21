@@ -32,6 +32,7 @@ class SyncHTTPClient:
         self,
         url: Optional[str] = None,
         api_key: Optional[str] = None,
+        role: Optional[str] = None,
         agent_id: Optional[str] = None,
         account: Optional[str] = None,
         user: Optional[str] = None,
@@ -40,6 +41,7 @@ class SyncHTTPClient:
         self._async_client = AsyncHTTPClient(
             url=url,
             api_key=api_key,
+            role=role,
             agent_id=agent_id,
             account=account,
             user=user,

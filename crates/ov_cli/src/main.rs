@@ -25,6 +25,7 @@ impl CliContext {
     pub fn new(
         output_format: OutputFormat,
         compact: bool,
+        role: Option<String>,
         account: Option<String>,
         user: Option<String>,
         agent_id: Option<String>,
@@ -35,6 +36,7 @@ impl CliContext {
             config,
             output_format,
             compact,
+            role,
             account,
             user,
             agent_id,
@@ -46,11 +48,15 @@ impl CliContext {
         mut config: Config,
         output_format: OutputFormat,
         compact: bool,
+        role: Option<String>,
         account: Option<String>,
         user: Option<String>,
         agent_id: Option<String>,
         sudo: bool,
     ) -> Self {
+        if role.is_some() {
+            config.role = role;
+        }
         if account.is_some() {
             config.account = account;
         }
@@ -81,6 +87,7 @@ impl CliContext {
         client::HttpClient::new(
             &self.config.url,
             api_key,
+            self.config.role.clone(),
             self.config.agent_id.clone(),
             self.config.account.clone(),
             self.config.user.clone(),
@@ -106,6 +113,10 @@ struct Cli {
     /// Account identifier to send as X-OpenViking-Account
     #[arg(long, global = true)]
     account: Option<String>,
+
+    /// Role identifier to send as X-OpenViking-Role in trusted mode
+    #[arg(long, global = true)]
+    role: Option<String>,
 
     /// User identifier to send as X-OpenViking-User
     #[arg(long, global = true)]
@@ -707,6 +718,7 @@ async fn main() {
     let ctx = match CliContext::new(
         output_format,
         compact,
+        cli.role.clone(),
         cli.account.clone(),
         cli.user.clone(),
         cli.agent_id.clone(),
@@ -955,6 +967,8 @@ mod tests {
             "ov",
             "--account",
             "acme",
+            "--role",
+            "admin",
             "--user",
             "alice",
             "--agent-id",
@@ -964,6 +978,7 @@ mod tests {
         .expect("cli should parse");
 
         assert_eq!(cli.account.as_deref(), Some("acme"));
+        assert_eq!(cli.role.as_deref(), Some("admin"));
         assert_eq!(cli.user.as_deref(), Some("alice"));
         assert_eq!(cli.agent_id.as_deref(), Some("assistant-1"));
     }
@@ -974,6 +989,7 @@ mod tests {
             url: "http://localhost:1933".to_string(),
             api_key: Some("test-key".to_string()),
             root_api_key: None,
+            role: Some("from-config-role".to_string()),
             account: Some("from-config-account".to_string()),
             user: Some("from-config-user".to_string()),
             agent_id: Some("from-config-agent".to_string()),
@@ -987,12 +1003,14 @@ mod tests {
             config,
             OutputFormat::Json,
             true,
+            Some("from-cli-role".to_string()),
             Some("from-cli-account".to_string()),
             Some("from-cli-user".to_string()),
             Some("from-cli-agent".to_string()),
             false,
         );
 
+        assert_eq!(ctx.config.role.as_deref(), Some("from-cli-role"));
         assert_eq!(ctx.config.account.as_deref(), Some("from-cli-account"));
         assert_eq!(ctx.config.user.as_deref(), Some("from-cli-user"));
         assert_eq!(ctx.config.agent_id.as_deref(), Some("from-cli-agent"));
@@ -1004,6 +1022,7 @@ mod tests {
             url: "http://localhost:1933".to_string(),
             api_key: Some("user-key".to_string()),
             root_api_key: Some("root-key".to_string()),
+            role: None,
             account: None,
             user: None,
             agent_id: None,
@@ -1021,6 +1040,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             false,
         );
         let client = ctx.get_client();
@@ -1031,6 +1051,7 @@ mod tests {
             config,
             OutputFormat::Json,
             true,
+            None,
             None,
             None,
             None,

@@ -28,6 +28,8 @@ pub struct Config {
     pub url: String,
     pub api_key: Option<String>,
     pub root_api_key: Option<String>,
+    #[serde(default = "default_role")]
+    pub role: Option<String>,
     #[serde(alias = "account_id")]
     pub account: Option<String>,
     #[serde(alias = "user_id")]
@@ -51,6 +53,10 @@ fn default_timeout() -> f64 {
     60.0
 }
 
+fn default_role() -> Option<String> {
+    Some("user".to_string())
+}
+
 fn default_output_format() -> String {
     "table".to_string()
 }
@@ -65,6 +71,7 @@ impl Default for Config {
             url: "http://localhost:1933".to_string(),
             api_key: None,
             root_api_key: None,
+            role: default_role(),
             account: None,
             user: None,
             agent_id: None,
@@ -181,6 +188,7 @@ mod tests {
         assert_eq!(config.account.as_deref(), Some("acme"));
         assert_eq!(config.user.as_deref(), Some("alice"));
         assert_eq!(config.agent_id.as_deref(), Some("assistant-1"));
+        assert_eq!(config.role.as_deref(), Some("user"));
         assert!(config.upload.ignore_dirs.is_none());
         assert!(config.upload.include.is_none());
         assert!(config.upload.exclude.is_none());
@@ -192,13 +200,15 @@ mod tests {
             r#"{
                 "url": "http://localhost:1933",
                 "api_key": "user-key",
-                "root_api_key": "root-key"
+                "root_api_key": "root-key",
+                "role": "admin"
             }"#,
         )
         .expect("config should deserialize with root_api_key");
 
         assert_eq!(config.api_key.as_deref(), Some("user-key"));
         assert_eq!(config.root_api_key.as_deref(), Some("root-key"));
+        assert_eq!(config.role.as_deref(), Some("admin"));
     }
 
     #[test]

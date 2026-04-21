@@ -2,7 +2,11 @@
 
 The Admin API manages accounts and users in a multi-tenant environment. It covers workspace (account) creation/deletion, user registration/removal, role changes, and API key regeneration.
 
-This API is for the `api_key` admin workflow. In `trusted` mode, ordinary requests do not use user-key registration, and Admin API calls return a permission error explaining that account/user management requires `api_key` mode with `root_api_key`.
+This API is available in both `api_key` and `trusted` deployments:
+- In `api_key` mode, the effective role is always derived from the presented API key.
+- In `trusted` mode, ordinary requests still do not use user-key registration, but a trusted gateway may call Admin API by injecting an appropriate `X-OpenViking-Role`.
+
+`X-OpenViking-Role` only applies in `trusted` mode. In `api_key` mode, the server ignores that header and derives the effective role from the presented key.
 
 ## Roles and Permissions
 
@@ -43,6 +47,21 @@ POST /api/v1/admin/accounts
 curl -X POST http://localhost:1933/api/v1/admin/accounts \
   -H "Content-Type: application/json" \
   -H "X-API-Key: <root-key>" \
+  -d '{
+    "account_id": "acme",
+    "admin_user_id": "alice"
+  }'
+```
+
+**Trusted mode (gateway-injected role)**
+
+```bash
+curl -X POST http://localhost:1933/api/v1/admin/accounts \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <root-key>" \
+  -H "X-OpenViking-Account: platform" \
+  -H "X-OpenViking-User: gateway-admin" \
+  -H "X-OpenViking-Role: root" \
   -d '{
     "account_id": "acme",
     "admin_user_id": "alice"

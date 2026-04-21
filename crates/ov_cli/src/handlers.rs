@@ -77,6 +77,7 @@ pub async fn handle_add_resource(
     let client = client::HttpClient::new(
         &ctx.config.url,
         ctx.config.api_key.clone(),
+        ctx.config.role.clone(),
         ctx.config.agent_id.clone(),
         ctx.config.account.clone(),
         ctx.config.user.clone(),

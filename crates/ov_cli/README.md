@@ -26,13 +26,14 @@ Create `~/.openviking/ovcli.conf`:
 {
   "url": "http://localhost:1933",
   "api_key": "your-api-key",
+  "role": "user",
   "account": "acme",
   "user": "alice",
   "agent_id": "assistant-1"
 }
 ```
 
-`account` and `user` are optional with a regular user key because the server can derive them from the key. They are recommended when you use `trusted` auth mode or a root key against tenant-scoped APIs.
+`role` defaults to `user` and only applies in `trusted` mode. In `api_key` mode the server ignores it and derives the effective role from the API key. `account` and `user` are optional with a regular user key because the server can derive them from the key. They are recommended when you use `trusted` auth mode or a root key against tenant-scoped APIs.
 
 ## Quick Start
 

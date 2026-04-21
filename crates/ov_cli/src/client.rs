@@ -15,6 +15,7 @@ pub struct HttpClient {
     http: ReqwestClient,
     base_url: String,
     api_key: Option<String>,
+    role: Option<String>,
     account: Option<String>,
     user: Option<String>,
     agent_id: Option<String>,
@@ -25,6 +26,7 @@ impl HttpClient {
     pub fn new(
         base_url: impl Into<String>,
         api_key: Option<String>,
+        role: Option<String>,
         agent_id: Option<String>,
         account: Option<String>,
         user: Option<String>,
@@ -39,6 +41,7 @@ impl HttpClient {
             http,
             base_url: base_url.into().trim_end_matches('/').to_string(),
             api_key,
+            role,
             account,
             user,
             agent_id,
@@ -153,6 +156,11 @@ impl HttpClient {
         if let Some(agent_id) = &self.agent_id {
             if let Ok(value) = reqwest::header::HeaderValue::from_str(agent_id) {
                 headers.insert("X-OpenViking-Agent", value);
+            }
+        }
+        if let Some(role) = &self.role {
+            if let Ok(value) = reqwest::header::HeaderValue::from_str(role) {
+                headers.insert("X-OpenViking-Role", value);
             }
         }
         if let Some(account) = &self.account {
@@ -1013,6 +1021,7 @@ mod tests {
         let client = HttpClient::new(
             "http://localhost:1933",
             Some("test-key".to_string()),
+            Some("admin".to_string()),
             Some("assistant-1".to_string()),
             Some("acme".to_string()),
             Some("alice".to_string()),
@@ -1032,6 +1041,12 @@ mod tests {
                 .get("X-OpenViking-Agent")
                 .and_then(|value| value.to_str().ok()),
             Some("assistant-1")
+        );
+        assert_eq!(
+            headers
+                .get("X-OpenViking-Role")
+                .and_then(|value| value.to_str().ok()),
+            Some("admin")
         );
         assert_eq!(
             headers

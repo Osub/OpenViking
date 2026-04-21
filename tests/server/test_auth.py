@@ -55,6 +55,7 @@ def _make_request(
     scope = {
         "type": "http",
         "path": path,
+        "query_string": b"",
         "headers": raw_headers,
         "app": app,
     }
@@ -126,6 +127,21 @@ def _build_auth_http_test_app(
     async def debug_vector_scroll(ctx=Depends(get_request_context)):
         """Expose a tenant-scoped debug route for auth regression tests."""
         return {"status": "ok", "result": {"role": ctx.role.value}}
+
+    @app.get("/api/v1/test/accounts/{account_id}/users/{user_id}")
+    async def trusted_identity_from_url(
+        account_id: str, user_id: str, ctx=Depends(get_request_context)
+    ):
+        """Expose a route whose explicit URL identity can satisfy trusted mode."""
+        return {
+            "status": "ok",
+            "result": {
+                "account_id": account_id,
+                "user_id": user_id,
+                "ctx_account_id": ctx.user.account_id,
+                "ctx_user_id": ctx.user.user_id,
+            },
+        }
 
     return app
 
@@ -693,6 +709,99 @@ async def test_trusted_mode_allows_header_identity_without_api_key():
     assert identity.agent_id == "assistant-1"
 
 
+async def test_trusted_mode_defaults_role_to_user():
+    """Trusted mode should default requests to USER when no explicit role header is sent."""
+    request = _make_request(
+        "/api/v1/resources",
+        headers={
+            "X-OpenViking-Account": "acme",
+            "X-OpenViking-User": "alice",
+        },
+        auth_enabled=False,
+        auth_mode="trusted",
+    )
+
+    identity = await resolve_identity(
+        request,
+        x_openviking_account="acme",
+        x_openviking_user="alice",
+    )
+
+    assert identity.role == Role.USER
+
+
+async def test_trusted_mode_accepts_explicit_admin_role_header():
+    """Trusted mode should allow the gateway to inject ADMIN role."""
+    request = _make_request(
+        "/api/v1/resources",
+        headers={
+            "X-OpenViking-Account": "acme",
+            "X-OpenViking-User": "alice",
+            "X-OpenViking-Role": "admin",
+        },
+        auth_enabled=False,
+        auth_mode="trusted",
+    )
+
+    identity = await resolve_identity(
+        request,
+        x_openviking_account="acme",
+        x_openviking_user="alice",
+        x_openviking_role="admin",
+    )
+
+    assert identity.role == Role.ADMIN
+    assert identity.account_id == "acme"
+    assert identity.user_id == "alice"
+
+
+async def test_trusted_mode_accepts_explicit_root_role_header():
+    """Trusted mode should allow the gateway to inject ROOT role."""
+    request = _make_request(
+        "/api/v1/resources",
+        headers={
+            "X-OpenViking-Account": "acme",
+            "X-OpenViking-User": "alice",
+            "X-OpenViking-Role": "root",
+        },
+        auth_enabled=False,
+        auth_mode="trusted",
+    )
+
+    identity = await resolve_identity(
+        request,
+        x_openviking_account="acme",
+        x_openviking_user="alice",
+        x_openviking_role="root",
+    )
+
+    assert identity.role == Role.ROOT
+    assert identity.account_id == "acme"
+    assert identity.user_id == "alice"
+
+
+async def test_trusted_mode_rejects_invalid_role_header():
+    """Trusted mode should reject unrecognized injected roles."""
+    request = _make_request(
+        "/api/v1/resources",
+        headers={
+            "X-OpenViking-Account": "acme",
+            "X-OpenViking-User": "alice",
+            "X-OpenViking-Role": "owner",
+        },
+        auth_enabled=False,
+        auth_mode="trusted",
+    )
+
+    with pytest.raises(InvalidArgumentError, match="X-OpenViking-Role"):
+        await resolve_identity(
+            request,
+            x_openviking_account="acme",
+            x_openviking_user="alice",
+            x_openviking_role="owner",
+        )
+
+
 async def test_trusted_mode_with_root_api_key_requires_matching_api_key():
     """Trusted mode should require the configured server API key when present."""
     request = _make_request(
@@ -780,6 +889,46 @@ async def test_trusted_mode_tenant_http_routes_accept_explicit_identity_headers(
 
     assert response.status_code == 200
     assert response.json()["result"] == {"account_id": "acme", "user_id": "alice"}
+
+
+async def test_trusted_mode_http_routes_accept_explicit_identity_from_url():
+    """Trusted mode should accept account_id/user_id supplied directly in the URL."""
+    app = _build_auth_http_test_app(
+        identity=None,
+        auth_enabled=False,
+        auth_mode="trusted",
+    )
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/api/v1/test/accounts/acme/users/alice")
+
+    assert response.status_code == 200
+    assert response.json()["result"] == {
+        "account_id": "acme",
+        "user_id": "alice",
+        "ctx_account_id": "acme",
+        "ctx_user_id": "alice",
+    }
+
+
+async def test_trusted_mode_rejects_conflicting_header_and_url_identity():
+    """Trusted mode should reject requests when explicit URL identity conflicts with headers."""
+    app = _build_auth_http_test_app(
+        identity=None,
+        auth_enabled=False,
+        auth_mode="trusted",
+    )
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get(
+            "/api/v1/test/accounts/acme/users/alice",
+            headers={"X-OpenViking-Account": "other-acct"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_ARGUMENT"
 
 
 async def test_trusted_mode_http_routes_require_api_key_when_root_key_configured():
