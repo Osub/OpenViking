@@ -1443,6 +1443,7 @@ async def test_commit_failed_when_long_term_extraction_fails_does_not_block_next
 async def test_retry_failed_session_commit_task_requeues_archived_messages(
     client: httpx.AsyncClient,
     service,
+    monkeypatch,
 ):
     """A retry reuses archived Phase 1 data rather than the empty live session."""
     create_resp = await client.post("/api/v1/sessions", json={})
@@ -1470,8 +1471,24 @@ async def test_retry_failed_session_commit_task_requeues_archived_messages(
         assert failed_task["status"] == "failed"
         extractor.extract_long_term_memories = no_memories
 
+        # The retry mutates archive descendants, so an exact session-root
+        # lease is insufficient and must never be used for this path.
+        ctx = RequestContext(user=UserIdentifier.the_default_user(), role=Role.ROOT)
+        session = service.sessions.session(ctx, session_id)
+        await session.load()
+        agfs = session._viking_fs._async_agfs
+        original_tree_acquire = agfs.pathlock_acquire_tree
+        tree_acquires = []
+
+        async def record_tree_acquire(*args, **kwargs):
+            tree_acquires.append((args, kwargs))
+            return await original_tree_acquire(*args, **kwargs)
+
+        monkeypatch.setattr(agfs, "pathlock_acquire_tree", record_tree_acquire)
+
         retry_resp = await client.post(f"/api/v1/tasks/{failed_task_id}/retry")
         assert retry_resp.status_code == 200
+        assert tree_acquires
         retry = retry_resp.json()["result"]
         assert retry["status"] == "accepted"
         assert retry["retry_of_task_id"] == failed_task_id
@@ -1480,7 +1497,6 @@ async def test_retry_failed_session_commit_task_requeues_archived_messages(
         retried_task = await _wait_for_task(client, retry["task_id"])
         assert retried_task["status"] == "completed"
 
-        ctx = RequestContext(user=UserIdentifier.the_default_user(), role=Role.ROOT)
         session = service.sessions.session(ctx, session_id)
         await session.load()
         archive_uri = f"{session.uri}/history/archive_001"

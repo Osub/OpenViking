@@ -2337,7 +2337,9 @@ class Session:
 
         archive_uri = f"{self._session_uri}/history/{archive_id}"
         session_path = self._viking_fs._uri_to_path(self._session_uri, ctx=self.ctx)
-        lease = await self._viking_fs._async_agfs.pathlock_acquire_exact(
+        # Retry mutates files below the session root (the archive marker and
+        # archive metadata), so the lease must cover the whole session tree.
+        lease = await self._viking_fs._async_agfs.pathlock_acquire_tree(
             session_path, timeout_secs=_SESSION_PHASE1_LOCK_TIMEOUT_SECONDS
         )
         try:
